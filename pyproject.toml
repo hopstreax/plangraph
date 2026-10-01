@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "plangraph"
+version = "0.1.0"
+description = "Validate your implementation plan against the real codebase before you code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "PlanGraph Contributors" }
+]
+dependencies = [
+    "networkx>=3.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+plangraph = "plangraph.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
