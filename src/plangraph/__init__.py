@@ -7,9 +7,20 @@ from plangraph.exceptions import (
     GraphNotFoundError,
     GraphValidationError,
     PlanGraphError,
+    PlanParseError,
 )
 from plangraph.graph import get_edge, get_node, load_graph
 from plangraph.models import Edge, ImpactEvidence, Node
+from plangraph.plan import (
+    CandidateEntity,
+    CandidateKind,
+    Confidence,
+    ParsedPlan,
+    PlanLocation,
+    PlanSection,
+    PlanStep,
+    parse_plan,
+)
 
 __version__ = "0.1.0"
 
@@ -25,4 +36,13 @@ __all__ = [
     "GraphNotFoundError",
     "GraphFormatError",
     "GraphValidationError",
+    "PlanParseError",
+    "CandidateEntity",
+    "CandidateKind",
+    "Confidence",
+    "ParsedPlan",
+    "PlanLocation",
+    "PlanSection",
+    "PlanStep",
+    "parse_plan",
 ]

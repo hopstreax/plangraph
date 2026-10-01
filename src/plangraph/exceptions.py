@@ -17,3 +17,7 @@ class GraphFormatError(PlanGraphError):
 
 class GraphValidationError(PlanGraphError):
     """Raised when the graph fails structural or schema validation."""
+
+
+class PlanParseError(PlanGraphError):
+    """Raised when a plan document cannot be read or parsed."""
