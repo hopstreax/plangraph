@@ -38,6 +38,17 @@ from plangraph.resolver import (
     ResolvedEntity,
     resolve_plan,
 )
+from plangraph.validation import (
+    DEFAULT_HIGH_IMPACT_THRESHOLD,
+    FindingCode,
+    ValidationConfig,
+    ValidationFinding,
+    ValidationResult,
+    ValidationSeverity,
+    ValidationSummary,
+    format_validation_report,
+    validate_plan,
+)
 
 __version__ = "0.1.0"
 
@@ -75,4 +86,13 @@ __all__ = [
     "analyze_impact",
     "format_impact_report",
     "MAX_CONTAINMENT_DISPLAY",
+    "DEFAULT_HIGH_IMPACT_THRESHOLD",
+    "FindingCode",
+    "ValidationConfig",
+    "ValidationFinding",
+    "ValidationResult",
+    "ValidationSeverity",
+    "ValidationSummary",
+    "validate_plan",
+    "format_validation_report",
 ]

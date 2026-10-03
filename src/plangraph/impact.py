@@ -25,6 +25,11 @@ from plangraph.resolver import (
     ResolvedEntity,
     resolve_plan,
 )
+from plangraph.validation import (
+    ValidationResult,
+    format_validation_report,
+    validate_plan,
+)
 
 # -----------------------------------------------------------------------------
 # Relationship Filtering Policy
@@ -181,10 +186,11 @@ class ImpactAnalysis:
     unresolved_entities: tuple[ResolvedEntity, ...] = field(default_factory=tuple)
     not_code_entities: tuple[ResolvedEntity, ...] = field(default_factory=tuple)
     summary: ImpactSummary = field(default_factory=lambda: ImpactSummary(0, 0, 0, 0, 0, 0))
+    validation: ValidationResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a JSON-serializable dictionary."""
-        return {
+        d = {
             "plan_title": self.plan_title,
             "plan_file": self.plan_file,
             "graph_file": self.graph_file,
@@ -194,6 +200,9 @@ class ImpactAnalysis:
             "unresolved": [e.to_dict() for e in self.unresolved_entities],
             "not_code_entities": [e.to_dict() for e in self.not_code_entities],
         }
+        if self.validation is not None:
+            d["validation"] = self.validation.to_dict()
+        return d
 
 
 # -----------------------------------------------------------------------------
@@ -420,18 +429,29 @@ def analyze_impact(
     else:
         raise PlanGraphError(f"Unsupported graph type: {type(graph).__name__}")
 
-    # 1. Resolve candidates if not already a ResolutionResult
+    # 1. Resolve candidates and obtain structured ParsedPlan
+    parsed_plan: ParsedPlan
     if isinstance(plan, ResolutionResult):
         resolution = plan
         plan_title = plan.plan_title
         plan_file_str = plan.plan_file
         if plan.graph_file:
             graph_file_str = plan.graph_file
+        parsed_plan = ParsedPlan(
+            file_path=Path(plan.plan_file) if plan.plan_file else None,
+            title=plan.plan_title,
+            sections=(),
+            all_candidates=tuple(e.candidate for e in plan.entities),
+        )
     else:
-        if isinstance(plan, (str, Path)):
-            if isinstance(plan, Path) or (isinstance(plan, str) and "\n" not in plan):
-                plan_file_str = str(plan)
-        resolution = resolve_plan(plan, di_graph)
+        if isinstance(plan, ParsedPlan):
+            parsed_plan = plan
+        else:
+            if isinstance(plan, (str, Path)):
+                if isinstance(plan, Path) or (isinstance(plan, str) and "\n" not in plan):
+                    plan_file_str = str(plan)
+            parsed_plan = parse_plan(plan)
+        resolution = resolve_plan(parsed_plan, di_graph)
         plan_title = resolution.plan_title
         if resolution.plan_file:
             plan_file_str = resolution.plan_file
@@ -511,7 +531,7 @@ def analyze_impact(
         relationships_by_type=sorted_relations_count,
     )
 
-    return ImpactAnalysis(
+    analysis = ImpactAnalysis(
         plan_title=plan_title,
         plan_file=plan_file_str,
         graph_file=graph_file_str,
@@ -521,6 +541,19 @@ def analyze_impact(
         unresolved_entities=resolution.unresolved,
         not_code_entities=resolution.not_code_entities,
         summary=summary,
+    )
+    validation = validate_plan(parsed_plan, impact=analysis)
+    return ImpactAnalysis(
+        plan_title=analysis.plan_title,
+        plan_file=analysis.plan_file,
+        graph_file=analysis.graph_file,
+        resolution_result=analysis.resolution_result,
+        impacted_entities=analysis.impacted_entities,
+        ambiguous_entities=analysis.ambiguous_entities,
+        unresolved_entities=analysis.unresolved_entities,
+        not_code_entities=analysis.not_code_entities,
+        summary=analysis.summary,
+        validation=validation,
     )
 
 
@@ -630,5 +663,11 @@ def format_impact_report(analysis: ImpactAnalysis, all_deps: bool = False) -> st
             )
             lines.append(f"  • {nc.candidate.text}{line_info}")
         lines.append("")
+
+    if analysis.validation is not None:
+        val_report = format_validation_report(analysis.validation)
+        if val_report:
+            lines.append(val_report.rstrip())
+            lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
