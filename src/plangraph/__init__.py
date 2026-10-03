@@ -21,6 +21,13 @@ from plangraph.plan import (
     PlanStep,
     parse_plan,
 )
+from plangraph.resolver import (
+    GraphIndex,
+    ResolutionResult,
+    ResolutionStatus,
+    ResolvedEntity,
+    resolve_plan,
+)
 
 __version__ = "0.1.0"
 
@@ -45,4 +52,9 @@ __all__ = [
     "PlanSection",
     "PlanStep",
     "parse_plan",
+    "ResolutionStatus",
+    "ResolvedEntity",
+    "ResolutionResult",
+    "GraphIndex",
+    "resolve_plan",
 ]

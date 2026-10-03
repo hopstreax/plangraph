@@ -10,11 +10,67 @@ from pathlib import Path
 from plangraph import __version__
 from plangraph.exceptions import PlanGraphError
 from plangraph.graph import load_graph
-from plangraph.plan import parse_plan
+from plangraph.plan import CandidateKind, parse_plan
+from plangraph.resolver import (
+    ResolutionResult,
+    ResolutionStatus,
+    ResolvedEntity,
+    resolve_plan,
+)
+
+
+def _status_icon(status: ResolutionStatus) -> str:
+    icons = {
+        ResolutionStatus.RESOLVED: "✓",
+        ResolutionStatus.AMBIGUOUS: "?",
+        ResolutionStatus.UNRESOLVED: "✗",
+        ResolutionStatus.NOT_CODE_ENTITY: "•",
+    }
+    return icons.get(status, " ")
+
+
+def _format_entity_resolution(entity: ResolvedEntity) -> str:
+    if entity.status == ResolutionStatus.RESOLVED:
+        if entity.candidate.kind == CandidateKind.FILE_PATH and entity.matched_nodes:
+            sf = entity.matched_nodes[0].source_file or entity.candidate.text
+            return f"resolved to {sf}"
+        elif entity.matched_nodes:
+            if len(entity.matched_nodes) == 1:
+                n = entity.matched_nodes[0]
+                loc = f":{n.source_location}" if n.source_location else ""
+                return f"resolved to {n.source_file}{loc}::{n.label}"
+            elif len(entity.matched_nodes) == 2 and entity.candidate.kind == CandidateKind.METHOD:
+                cls_node, meth_node = entity.matched_nodes
+                loc = f":{meth_node.source_location}" if meth_node.source_location else ""
+                meth_clean = meth_node.label.lstrip(".")
+                return f"resolved to {meth_node.source_file}{loc}::{cls_node.label}.{meth_clean}"
+            else:
+                targets = [f"{n.source_file}::{n.label}" for n in entity.matched_nodes]
+                return f"resolved to {', '.join(targets)}"
+        return f"resolved: {entity.resolution_reason}"
+    elif entity.status == ResolutionStatus.AMBIGUOUS:
+        return f"ambiguous: {entity.resolution_reason}"
+    elif entity.status == ResolutionStatus.UNRESOLVED:
+        return f"unresolved: {entity.resolution_reason}"
+    elif entity.status == ResolutionStatus.NOT_CODE_ENTITY:
+        return f"not a code entity; {entity.resolution_reason}"
+    return entity.resolution_reason
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the plangraph command-line interface."""
+    # Ensure stdout/stderr handle UTF-8 symbols gracefully on platforms like Windows
+    if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if sys.stderr.encoding and sys.stderr.encoding.lower() not in ("utf-8", "utf8"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(
         prog="plangraph",
         description="Validate your implementation plan against the real codebase before you code.",
@@ -47,6 +103,30 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to the implementation plan markdown file.",
     )
     parse_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit output as machine-readable JSON.",
+    )
+
+    # Resolve plan subcommand
+    resolve_parser = subparsers.add_parser(
+        "resolve-plan",
+        help="Resolve plan candidates against a Graphify code graph.",
+    )
+    resolve_parser.add_argument(
+        "plan_path",
+        type=str,
+        help="Path to the implementation plan markdown file.",
+    )
+    resolve_parser.add_argument(
+        "-g",
+        "--graph",
+        dest="graph_path",
+        required=True,
+        type=str,
+        help="Path to the Graphify graph.json artifact.",
+    )
+    resolve_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit output as machine-readable JSON.",
@@ -112,6 +192,42 @@ def main(argv: list[str] | None = None) -> int:
             if by_kind:
                 breakdown = ", ".join(f"{cnt} {k}" for k, cnt in sorted(by_kind.items()))
                 print(f"  Breakdown: {breakdown}")
+            return 0
+        except PlanGraphError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    if args.command == "resolve-plan":
+        target_plan = Path(args.plan_path)
+        target_graph = Path(args.graph_path)
+        try:
+            result = resolve_plan(target_plan, target_graph)
+            if args.json:
+                print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+                return 0
+
+            print("PlanGraph: Plan Resolution")
+            print()
+            for entity in result.entities:
+                icon = _status_icon(entity.status)
+                kind_str = entity.candidate.kind.value
+                line_info = (
+                    f" (Line {entity.candidate.location.line_number})"
+                    if entity.candidate.location
+                    else ""
+                )
+                print(f"{icon} {entity.candidate.text}")
+                print(f"  {kind_str}{line_info}")
+                detail = _format_entity_resolution(entity)
+                print(f"  → {detail}")
+                print()
+
+            print("Summary:")
+            print(f"  Total Candidates:    {len(result.entities)}")
+            print(f"  • Resolved:          {len(result.resolved)}")
+            print(f"  • Ambiguous:         {len(result.ambiguous)}")
+            print(f"  • Unresolved:        {len(result.unresolved)}")
+            print(f"  • Not Code Entities: {len(result.not_code_entities)}")
             return 0
         except PlanGraphError as exc:
             print(f"Error: {exc}", file=sys.stderr)
