@@ -49,6 +49,18 @@ from plangraph.validation import (
     format_validation_report,
     validate_plan,
 )
+from plangraph.review import (
+    ClassifiedFile,
+    FileRole,
+    PlanReview,
+    ReviewItem,
+    ReviewSummary,
+    StepReview,
+    format_review_report,
+    is_actionable_step,
+    is_test_path,
+    review_plan,
+)
 
 __version__ = "0.1.0"
 
@@ -95,4 +107,14 @@ __all__ = [
     "ValidationSummary",
     "validate_plan",
     "format_validation_report",
+    "ClassifiedFile",
+    "FileRole",
+    "PlanReview",
+    "ReviewItem",
+    "ReviewSummary",
+    "StepReview",
+    "format_review_report",
+    "is_actionable_step",
+    "is_test_path",
+    "review_plan",
 ]

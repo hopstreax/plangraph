@@ -25,6 +25,11 @@ from plangraph.resolver import (
     ResolvedEntity,
     resolve_plan,
 )
+from plangraph.review import (
+    PlanReview,
+    format_review_report,
+    review_plan,
+)
 from plangraph.validation import (
     ValidationResult,
     format_validation_report,
@@ -187,6 +192,7 @@ class ImpactAnalysis:
     not_code_entities: tuple[ResolvedEntity, ...] = field(default_factory=tuple)
     summary: ImpactSummary = field(default_factory=lambda: ImpactSummary(0, 0, 0, 0, 0, 0))
     validation: ValidationResult | None = None
+    review: PlanReview | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to a JSON-serializable dictionary."""
@@ -202,6 +208,8 @@ class ImpactAnalysis:
         }
         if self.validation is not None:
             d["validation"] = self.validation.to_dict()
+        if self.review is not None:
+            d["review"] = self.review.to_dict()
         return d
 
 
@@ -543,6 +551,7 @@ def analyze_impact(
         summary=summary,
     )
     validation = validate_plan(parsed_plan, impact=analysis)
+    review = review_plan(parsed_plan, impact=analysis, validation=validation)
     return ImpactAnalysis(
         plan_title=analysis.plan_title,
         plan_file=analysis.plan_file,
@@ -554,6 +563,7 @@ def analyze_impact(
         not_code_entities=analysis.not_code_entities,
         summary=analysis.summary,
         validation=validation,
+        review=review,
     )
 
 
@@ -668,6 +678,12 @@ def format_impact_report(analysis: ImpactAnalysis, all_deps: bool = False) -> st
         val_report = format_validation_report(analysis.validation)
         if val_report:
             lines.append(val_report.rstrip())
+            lines.append("")
+
+    if analysis.review is not None:
+        rev_report = format_review_report(analysis.review)
+        if rev_report:
+            lines.append(rev_report.rstrip())
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
