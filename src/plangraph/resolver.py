@@ -732,7 +732,7 @@ def _find_scoped_file_context(
                 return suffix_matches[0]
         return None
 
-    # Scope 1: Same step or same line
+    # Scope 1: Exact same step (same section + step_number) or same line
     step_files: set[str] = set()
     for other in all_candidates:
         if other.kind == CandidateKind.FILE_PATH:
@@ -753,16 +753,58 @@ def _find_scoped_file_context(
         # Multiple conflicting files in same step -> do not guess
         return None
 
-    # Scope 2: Same section (if no step files found)
-    section_files: set[str] = set()
+    # Scope 2: Nearest preceding step declaring a file in the same section
+    if candidate.location.step_number is not None:
+        preceding_step_files: dict[int, set[str]] = {}
+        for other in all_candidates:
+            if (
+                other.kind == CandidateKind.FILE_PATH
+                and other.location.section == candidate.location.section
+                and other.location.step_number is not None
+                and other.location.step_number < candidate.location.step_number
+            ):
+                repo_file = get_repo_file(other)
+                if repo_file:
+                    preceding_step_files.setdefault(other.location.step_number, set()).add(repo_file)
+
+        if preceding_step_files:
+            latest_step = max(preceding_step_files.keys())
+            latest_files = preceding_step_files[latest_step]
+            if len(latest_files) == 1:
+                return next(iter(latest_files))
+            if len(latest_files) > 1:
+                return None
+
+    # Scope 3: Section prose files (outside of any numbered step)
+    section_prose_files: set[str] = set()
     for other in all_candidates:
-        if other.kind == CandidateKind.FILE_PATH and other.location.section == candidate.location.section:
+        if (
+            other.kind == CandidateKind.FILE_PATH
+            and other.location.section == candidate.location.section
+            and other.location.step_number is None
+        ):
             repo_file = get_repo_file(other)
             if repo_file:
-                section_files.add(repo_file)
+                section_prose_files.add(repo_file)
 
-    if len(section_files) == 1:
-        return next(iter(section_files))
+    if len(section_prose_files) == 1:
+        return next(iter(section_prose_files))
+    if len(section_prose_files) > 1:
+        return None
+
+    # Scope 4: Unambiguous section-wide file (if exactly one unique file across the entire section)
+    section_all_files: set[str] = set()
+    for other in all_candidates:
+        if (
+            other.kind == CandidateKind.FILE_PATH
+            and other.location.section == candidate.location.section
+        ):
+            repo_file = get_repo_file(other)
+            if repo_file:
+                section_all_files.add(repo_file)
+
+    if len(section_all_files) == 1:
+        return next(iter(section_all_files))
 
     return None
 

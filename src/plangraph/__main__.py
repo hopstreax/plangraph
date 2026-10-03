@@ -58,6 +58,17 @@ def _format_entity_resolution(entity: ResolvedEntity) -> str:
     return entity.resolution_reason
 
 
+def _emit_json(data: dict[str, Any]) -> None:
+    """Emit JSON to stdout ensuring strict UTF-8 / ASCII compatibility across platforms."""
+    payload = json.dumps(data, indent=2, ensure_ascii=True) + "\n"
+    try:
+        sys.stdout.buffer.write(payload.encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except Exception:
+        sys.stdout.write(payload)
+        sys.stdout.flush()
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the plangraph command-line interface."""
     # Ensure stdout/stderr handle UTF-8 symbols gracefully on platforms like Windows
@@ -187,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             plan = parse_plan(target)
             if args.json:
-                print(json.dumps(plan.to_dict(), indent=2, ensure_ascii=False))
+                _emit_json(plan.to_dict())
                 return 0
 
             print(f"PlanGraph: Parsed Plan from {target}")
@@ -234,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             result = resolve_plan(target_plan, target_graph)
             if args.json:
-                print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+                _emit_json(result.to_dict())
                 return 0
 
             print("PlanGraph: Plan Resolution")
@@ -270,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             analysis = analyze_impact(target_plan, target_graph)
             if args.json:
-                print(json.dumps(analysis.to_dict(), indent=2, ensure_ascii=False))
+                _emit_json(analysis.to_dict())
                 return 0
 
             print(format_impact_report(analysis, all_deps=args.all_deps), end="")

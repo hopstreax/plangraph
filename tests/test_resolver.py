@@ -677,3 +677,48 @@ def test_unrelated_file_context_does_not_affect_resolution(
     fn_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FUNCTION)
     assert fn_cand.status == ResolutionStatus.AMBIGUOUS
     assert len(fn_cand.matched_nodes) == 2
+
+
+def test_contextual_disambiguation_multi_step_exact_structure() -> None:
+    """Exact regression test for manual test plan: file declared in step 1 scopes steps 2-4 even when step 5 introduces tests/test_hooks.py."""
+    graph = nx.DiGraph()
+    # graphify/hooks.py entities
+    graph.add_node("file_hooks", label="graphify/hooks.py", file_type="file", source_file="graphify/hooks.py", source_location="L1")
+    graph.add_node("fn_hooks_status", label="status()", file_type="code", source_file="graphify/hooks.py", source_location="L925", _callable=True)
+    graph.add_node("fn_hooks_check", label="_check()", file_type="code", source_file="graphify/hooks.py", source_location="L940", _callable=True)
+    graph.add_node("fn_hooks_comp", label="_comparable_block()", file_type="code", source_file="graphify/hooks.py", source_location="L950", _callable=True)
+    # Ambiguous counterparts in other files
+    graph.add_node("file_prs", label="graphify/prs.py", file_type="file", source_file="graphify/prs.py", source_location="L1")
+    graph.add_node("fn_prs_status", label="status()", file_type="code", source_file="graphify/prs.py", source_location="L82", _callable=True)
+    graph.add_node("file_compat", label="graphify/multigraph_compat.py", file_type="file", source_file="graphify/multigraph_compat.py", source_location="L1")
+    graph.add_node("fn_compat_check", label="_check()", file_type="code", source_file="graphify/multigraph_compat.py", source_location="L61", _callable=True)
+    # tests/test_hooks.py
+    graph.add_node("file_test_hooks", label="tests/test_hooks.py", file_type="file", source_file="tests/test_hooks.py", source_location="L1")
+
+    plan_md = """# Implementation Plan
+
+## Changes
+
+1. Update `graphify/hooks.py`.
+2. Modify `status()`.
+3. Update `_check()`.
+4. Use `_comparable_block()` for normalized hook comparison.
+5. Add regression tests in `tests/test_hooks.py`.
+"""
+    res = resolve_plan(plan_md, graph)
+    status_cand = next(e for e in res.entities if e.candidate.text == "status()")
+    assert status_cand.status == ResolutionStatus.RESOLVED
+    assert len(status_cand.matched_nodes) == 1
+    assert status_cand.matched_nodes[0].source_file == "graphify/hooks.py"
+    assert status_cand.matched_nodes[0].source_location == "L925"
+
+    check_cand = next(e for e in res.entities if e.candidate.text == "_check()")
+    assert check_cand.status == ResolutionStatus.RESOLVED
+    assert len(check_cand.matched_nodes) == 1
+    assert check_cand.matched_nodes[0].source_file == "graphify/hooks.py"
+    assert check_cand.matched_nodes[0].source_location == "L940"
+
+    comp_cand = next(e for e in res.entities if e.candidate.text == "_comparable_block()")
+    assert comp_cand.status == ResolutionStatus.RESOLVED
+    assert len(comp_cand.matched_nodes) == 1
+    assert comp_cand.matched_nodes[0].source_file == "graphify/hooks.py"

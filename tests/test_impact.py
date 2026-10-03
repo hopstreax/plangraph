@@ -669,3 +669,40 @@ def test_cli_all_deps_flag(tmp_path: Path) -> None:
         exit_code_all = main(["analyze-plan", str(plan_file), "-g", str(graph_file), "--all-deps"])
     assert exit_code_all == 0
     assert "imports → sys" in stdout_all.getvalue()
+
+
+def test_cli_json_output_strict_utf8(tmp_path: Path, impact_test_graph: nx.DiGraph) -> None:
+    """Test that --json produces valid UTF-8 JSON parseable with strict utf-8 encoding."""
+    import os
+    import subprocess
+    import sys
+
+    plan_file = tmp_path / "plan.md"
+    plan_file.write_text("1. Update `UserService.get_user()`.\n", encoding="utf-8")
+
+    graph_file = tmp_path / "graph.json"
+    graph_data = {
+        "directed": True,
+        "nodes": [{"id": nid, **data} for nid, data in impact_test_graph.nodes(data=True)],
+        "links": [{"source": u, "target": v, **data} for u, v, data in impact_test_graph.edges(data=True)],
+    }
+    graph_file.write_text(json.dumps(graph_data), encoding="utf-8")
+
+    out_file = tmp_path / "output.json"
+
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+    with open(out_file, "wb") as out_fp:
+        subprocess.run(
+            [sys.executable, "-m", "plangraph", "analyze-plan", str(plan_file), "-g", str(graph_file), "--json"],
+            stdout=out_fp,
+            stderr=subprocess.PIPE,
+            env=env,
+            check=True,
+        )
+
+    # Verify that the file can be read strictly with utf-8 encoding (as python -m json.tool does)
+    with open(out_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["summary"]["resolved_candidates"] == 1
+    assert data["impacted_entities"][0]["label"] == "UserService.get_user()"
