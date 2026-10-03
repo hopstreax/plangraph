@@ -339,7 +339,11 @@ def _resolve_file_path(candidate: CandidateEntity, index: GraphIndex) -> Resolve
     )
 
 
-def _resolve_class(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEntity:
+def _resolve_class(
+    candidate: CandidateEntity,
+    index: GraphIndex,
+    file_context: str | None = None,
+) -> ResolvedEntity:
     name = candidate.text.strip()
     matches = index.classes_by_name.get(name, [])
 
@@ -353,6 +357,19 @@ def _resolve_class(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEnt
             resolution_reason=f"exact class-name match in {node.source_file}{loc}",
         )
     elif len(matches) > 1:
+        if file_context:
+            scoped = [n for n in matches if n.source_file == file_context]
+            if len(scoped) == 1:
+                node = scoped[0]
+                loc = f":{node.source_location}" if node.source_location else ""
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=tuple(scoped),
+                    resolution_reason=f"exact class-name match in plan-scoped file {node.source_file}{loc}",
+                )
+            elif len(scoped) > 1:
+                matches = scoped
         locs = [f"{n.source_file}:{n.source_location or ''}" for n in matches]
         return ResolvedEntity(
             candidate=candidate,
@@ -376,6 +393,18 @@ def _resolve_class(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEnt
             resolution_reason=f"exact code symbol match for '{name}' in {node.source_file}",
         )
     elif len(code_matches) > 1:
+        if file_context:
+            scoped_code = [n for n in code_matches if n.source_file == file_context]
+            if len(scoped_code) == 1:
+                node = scoped_code[0]
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=tuple(scoped_code),
+                    resolution_reason=f"exact code symbol match for '{name}' in plan-scoped file {node.source_file}",
+                )
+            elif len(scoped_code) > 1:
+                code_matches = scoped_code
         locs = [f"{n.source_file}:{n.source_location or ''}" for n in code_matches]
         return ResolvedEntity(
             candidate=candidate,
@@ -392,7 +421,11 @@ def _resolve_class(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEnt
     )
 
 
-def _resolve_function(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEntity:
+def _resolve_function(
+    candidate: CandidateEntity,
+    index: GraphIndex,
+    file_context: str | None = None,
+) -> ResolvedEntity:
     clean_name = candidate.text.rstrip("()").lstrip(".")
     matches = index.functions_by_name.get(clean_name, [])
 
@@ -406,6 +439,19 @@ def _resolve_function(candidate: CandidateEntity, index: GraphIndex) -> Resolved
             resolution_reason=f"exact function match for '{clean_name}()' in {node.source_file}{loc}",
         )
     elif len(matches) > 1:
+        if file_context:
+            scoped = [n for n in matches if n.source_file == file_context]
+            if len(scoped) == 1:
+                node = scoped[0]
+                loc = f":{node.source_location}" if node.source_location else ""
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=tuple(scoped),
+                    resolution_reason=f"exact function match for '{clean_name}()' in plan-scoped file {node.source_file}{loc}",
+                )
+            elif len(scoped) > 1:
+                matches = scoped
         locs = [f"{n.source_file}:{n.source_location or ''}" for n in matches]
         return ResolvedEntity(
             candidate=candidate,
@@ -428,6 +474,18 @@ def _resolve_function(candidate: CandidateEntity, index: GraphIndex) -> Resolved
             resolution_reason=f"matched callable method '{clean_name}()' on {cls_node.label} in {meth_node.source_file}",
         )
     elif len(method_pairs) > 1:
+        if file_context:
+            scoped_pairs = [pair for pair in method_pairs if pair[1].source_file == file_context]
+            if len(scoped_pairs) == 1:
+                cls_node, meth_node = scoped_pairs[0]
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=(meth_node,),
+                    resolution_reason=f"matched callable method '{clean_name}()' on {cls_node.label} in plan-scoped file {meth_node.source_file}",
+                )
+            elif len(scoped_pairs) > 1:
+                method_pairs = scoped_pairs
         meth_nodes = tuple(pair[1] for pair in method_pairs)
         return ResolvedEntity(
             candidate=candidate,
@@ -444,7 +502,11 @@ def _resolve_function(candidate: CandidateEntity, index: GraphIndex) -> Resolved
     )
 
 
-def _resolve_method(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEntity:
+def _resolve_method(
+    candidate: CandidateEntity,
+    index: GraphIndex,
+    file_context: str | None = None,
+) -> ResolvedEntity:
     text = candidate.text.strip()
     if "." in text:
         cls_part, meth_part = text.split(".", 1)
@@ -462,6 +524,19 @@ def _resolve_method(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEn
                 resolution_reason=f"exact qualified method match for {cls_name}.{meth_name} in {meth_node.source_file}{loc}",
             )
         elif len(pairs) > 1:
+            if file_context:
+                scoped_pairs = [pair for pair in pairs if pair[1].source_file == file_context]
+                if len(scoped_pairs) == 1:
+                    cls_node, meth_node = scoped_pairs[0]
+                    loc = f":{meth_node.source_location}" if meth_node.source_location else ""
+                    return ResolvedEntity(
+                        candidate=candidate,
+                        status=ResolutionStatus.RESOLVED,
+                        matched_nodes=(cls_node, meth_node),
+                        resolution_reason=f"exact qualified method match for {cls_name}.{meth_name} in plan-scoped file {meth_node.source_file}{loc}",
+                    )
+                elif len(scoped_pairs) > 1:
+                    pairs = scoped_pairs
             nodes = []
             for c, m in pairs:
                 nodes.extend([c, m])
@@ -500,6 +575,18 @@ def _resolve_method(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEn
             resolution_reason=f"exact method match for '{clean_name}()' on {cls_node.label}",
         )
     elif len(pairs) > 1:
+        if file_context:
+            scoped_pairs = [pair for pair in pairs if pair[1].source_file == file_context]
+            if len(scoped_pairs) == 1:
+                cls_node, meth_node = scoped_pairs[0]
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=(cls_node, meth_node),
+                    resolution_reason=f"exact method match for '{clean_name}()' on {cls_node.label} in plan-scoped file {meth_node.source_file}",
+                )
+            elif len(scoped_pairs) > 1:
+                pairs = scoped_pairs
         nodes = []
         for c, m in pairs:
             nodes.extend([c, m])
@@ -518,7 +605,11 @@ def _resolve_method(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEn
     )
 
 
-def _resolve_symbol(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEntity:
+def _resolve_symbol(
+    candidate: CandidateEntity,
+    index: GraphIndex,
+    file_context: str | None = None,
+) -> ResolvedEntity:
     name = candidate.text.strip()
     matches = index.nodes_by_label.get(name, [])
 
@@ -532,6 +623,19 @@ def _resolve_symbol(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEn
             resolution_reason=f"exact symbol match for '{name}' in {node.source_file}{loc}",
         )
     elif len(matches) > 1:
+        if file_context:
+            scoped = [n for n in matches if n.source_file == file_context]
+            if len(scoped) == 1:
+                node = scoped[0]
+                loc = f":{node.source_location}" if node.source_location else ""
+                return ResolvedEntity(
+                    candidate=candidate,
+                    status=ResolutionStatus.RESOLVED,
+                    matched_nodes=tuple(scoped),
+                    resolution_reason=f"exact symbol match for '{name}' in plan-scoped file {node.source_file}{loc}",
+                )
+            elif len(scoped) > 1:
+                matches = scoped
         locs = [f"{n.source_file}:{n.source_location or ''}" for n in matches]
         return ResolvedEntity(
             candidate=candidate,
@@ -597,18 +701,88 @@ def _resolve_concept(candidate: CandidateEntity, index: GraphIndex) -> ResolvedE
     )
 
 
-def resolve_candidate(candidate: CandidateEntity, index: GraphIndex) -> ResolvedEntity:
+def _find_scoped_file_context(
+    candidate: CandidateEntity,
+    all_candidates: tuple[CandidateEntity, ...] | list[CandidateEntity],
+    index: GraphIndex,
+) -> str | None:
+    """Find an explicit, unambiguous repository file path associated with this candidate in the plan.
+
+    Checks:
+    1. Exact same step (same section + step_number) or same line_number
+    2. Same section
+
+    Returns normalized repository file path if exactly one unique resolved file is found in scope,
+    or None if 0 or >1 files are found.
+    """
+    if candidate.kind == CandidateKind.FILE_PATH:
+        return None
+
+    def get_repo_file(cand: CandidateEntity) -> str | None:
+        norm = normalize_path(cand.text)
+        if norm in index.nodes_by_source_file:
+            return norm
+        if "/" not in norm:
+            matches = index.files_by_basename.get(norm, set())
+            if len(matches) == 1:
+                return next(iter(matches))
+        else:
+            suffix_matches = [sf for sf in index.nodes_by_source_file if sf.endswith(f"/{norm}")]
+            if len(suffix_matches) == 1:
+                return suffix_matches[0]
+        return None
+
+    # Scope 1: Same step or same line
+    step_files: set[str] = set()
+    for other in all_candidates:
+        if other.kind == CandidateKind.FILE_PATH:
+            same_step = (
+                candidate.location.step_number is not None
+                and other.location.section == candidate.location.section
+                and other.location.step_number == candidate.location.step_number
+            )
+            same_line = other.location.line_number == candidate.location.line_number
+            if same_step or same_line:
+                repo_file = get_repo_file(other)
+                if repo_file:
+                    step_files.add(repo_file)
+
+    if len(step_files) == 1:
+        return next(iter(step_files))
+    if len(step_files) > 1:
+        # Multiple conflicting files in same step -> do not guess
+        return None
+
+    # Scope 2: Same section (if no step files found)
+    section_files: set[str] = set()
+    for other in all_candidates:
+        if other.kind == CandidateKind.FILE_PATH and other.location.section == candidate.location.section:
+            repo_file = get_repo_file(other)
+            if repo_file:
+                section_files.add(repo_file)
+
+    if len(section_files) == 1:
+        return next(iter(section_files))
+
+    return None
+
+
+def resolve_candidate(
+    candidate: CandidateEntity,
+    index: GraphIndex,
+    file_context: str | None = None,
+) -> ResolvedEntity:
     """Resolve a single CandidateEntity against the repository graph index."""
     if candidate.kind == CandidateKind.FILE_PATH:
         return _resolve_file_path(candidate, index)
     elif candidate.kind == CandidateKind.CLASS:
-        return _resolve_class(candidate, index)
+        return _resolve_class(candidate, index, file_context=file_context)
     elif candidate.kind == CandidateKind.FUNCTION:
-        return _resolve_function(candidate, index)
+        return _resolve_function(candidate, index, file_context=file_context)
     elif candidate.kind == CandidateKind.METHOD:
-        return _resolve_method(candidate, index)
+        return _resolve_method(candidate, index, file_context=file_context)
     elif candidate.kind == CandidateKind.SYMBOL:
-        return _resolve_symbol(candidate, index)
+        return _resolve_symbol(candidate, index, file_context=file_context)
     elif candidate.kind == CandidateKind.CONCEPT:
         return _resolve_concept(candidate, index)
 
@@ -663,7 +837,8 @@ def resolve_plan(
 
     resolved_list: list[ResolvedEntity] = []
     for candidate in parsed_plan.all_candidates:
-        resolved_entity = resolve_candidate(candidate, index)
+        file_ctx = _find_scoped_file_context(candidate, parsed_plan.all_candidates, index)
+        resolved_entity = resolve_candidate(candidate, index, file_context=file_ctx)
         resolved_list.append(resolved_entity)
 
     return ResolutionResult(

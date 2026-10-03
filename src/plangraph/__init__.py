@@ -21,6 +21,16 @@ from plangraph.plan import (
     PlanStep,
     parse_plan,
 )
+from plangraph.impact import (
+    MAX_CONTAINMENT_DISPLAY,
+    ImpactAnalysis,
+    ImpactDirection,
+    ImpactRelationship,
+    ImpactSummary,
+    ImpactedEntity,
+    analyze_impact,
+    format_impact_report,
+)
 from plangraph.resolver import (
     GraphIndex,
     ResolutionResult,
@@ -57,4 +67,12 @@ __all__ = [
     "ResolutionResult",
     "GraphIndex",
     "resolve_plan",
+    "ImpactDirection",
+    "ImpactRelationship",
+    "ImpactedEntity",
+    "ImpactSummary",
+    "ImpactAnalysis",
+    "analyze_impact",
+    "format_impact_report",
+    "MAX_CONTAINMENT_DISPLAY",
 ]

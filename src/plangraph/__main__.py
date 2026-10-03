@@ -11,6 +11,7 @@ from plangraph import __version__
 from plangraph.exceptions import PlanGraphError
 from plangraph.graph import load_graph
 from plangraph.plan import CandidateKind, parse_plan
+from plangraph.impact import ImpactAnalysis, analyze_impact, format_impact_report
 from plangraph.resolver import (
     ResolutionResult,
     ResolutionStatus,
@@ -132,6 +133,36 @@ def main(argv: list[str] | None = None) -> int:
         help="Emit output as machine-readable JSON.",
     )
 
+    # Analyze plan impact subcommand
+    analyze_parser = subparsers.add_parser(
+        "analyze-plan",
+        aliases=["impact-plan"],
+        help="Analyze the direct codebase impact of a contributor implementation plan.",
+    )
+    analyze_parser.add_argument(
+        "plan_path",
+        type=str,
+        help="Path to the implementation plan markdown file.",
+    )
+    analyze_parser.add_argument(
+        "-g",
+        "--graph",
+        dest="graph_path",
+        required=True,
+        type=str,
+        help="Path to the Graphify graph.json artifact.",
+    )
+    analyze_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit output as machine-readable JSON.",
+    )
+    analyze_parser.add_argument(
+        "--all-deps",
+        action="store_true",
+        help="Include standard-library and external dependency relationships in terminal output.",
+    )
+
     args = parser.parse_args(argv)
 
     if not args.command:
@@ -228,6 +259,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  • Ambiguous:         {len(result.ambiguous)}")
             print(f"  • Unresolved:        {len(result.unresolved)}")
             print(f"  • Not Code Entities: {len(result.not_code_entities)}")
+            return 0
+        except PlanGraphError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    if args.command in ("analyze-plan", "impact-plan"):
+        target_plan = Path(args.plan_path)
+        target_graph = Path(args.graph_path)
+        try:
+            analysis = analyze_impact(target_plan, target_graph)
+            if args.json:
+                print(json.dumps(analysis.to_dict(), indent=2, ensure_ascii=False))
+                return 0
+
+            print(format_impact_report(analysis, all_deps=args.all_deps), end="")
             return 0
         except PlanGraphError as exc:
             print(f"Error: {exc}", file=sys.stderr)

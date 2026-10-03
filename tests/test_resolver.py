@@ -610,3 +610,70 @@ def test_cli_resolve_plan_missing_files_error(
 
     captured = capsys.readouterr()
     assert "Error:" in captured.err
+
+
+# -----------------------------------------------------------------------------
+# Context-Aware Disambiguation Tests
+# -----------------------------------------------------------------------------
+
+def test_contextual_disambiguation_unique_in_file(resolver_test_graph: nx.DiGraph) -> None:
+    """A globally ambiguous function is disambiguated when scoped to a file in the same plan step."""
+    plan_md = """# Implementation Plan
+## Step 1
+1. In `utils/helpers.py`, update `format_name()`.
+"""
+    res = resolve_plan(plan_md, resolver_test_graph)
+    file_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FILE_PATH)
+    assert file_cand.status == ResolutionStatus.RESOLVED
+
+    fn_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FUNCTION)
+    assert fn_cand.status == ResolutionStatus.RESOLVED
+    assert len(fn_cand.matched_nodes) == 1
+    assert fn_cand.matched_nodes[0].source_file == "utils/helpers.py"
+    assert "plan-scoped file" in fn_cand.resolution_reason
+
+
+def test_contextual_disambiguation_multiple_in_file_remains_ambiguous(
+    resolver_test_graph: nx.DiGraph,
+) -> None:
+    """If a file contains multiple entities matching the candidate, it remains AMBIGUOUS."""
+    graph = resolver_test_graph.copy()
+    graph.add_node(
+        "utils_helpers_format_name_v2",
+        label="format_name()",
+        file_type="code",
+        source_file="utils/helpers.py",
+        source_location="L50",
+        _callable=True,
+    )
+    plan_md = """# Plan
+1. In `utils/helpers.py`, update `format_name()`.
+"""
+    res = resolve_plan(plan_md, graph)
+    fn_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FUNCTION)
+    assert fn_cand.status == ResolutionStatus.AMBIGUOUS
+    assert len(fn_cand.matched_nodes) == 2
+
+
+def test_no_file_context_preserves_ambiguity(resolver_test_graph: nx.DiGraph) -> None:
+    """When no file context is provided in the plan, ambiguous symbols remain AMBIGUOUS."""
+    plan_md = """# Plan
+1. Update `format_name()`.
+"""
+    res = resolve_plan(plan_md, resolver_test_graph)
+    fn_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FUNCTION)
+    assert fn_cand.status == ResolutionStatus.AMBIGUOUS
+    assert len(fn_cand.matched_nodes) == 2
+
+
+def test_unrelated_file_context_does_not_affect_resolution(
+    resolver_test_graph: nx.DiGraph,
+) -> None:
+    """When the file context in scope does not contain the candidate, it preserves global ambiguity."""
+    plan_md = """# Plan
+1. In `auth/token.py`, update `format_name()`.
+"""
+    res = resolve_plan(plan_md, resolver_test_graph)
+    fn_cand = next(e for e in res.entities if e.candidate.kind == CandidateKind.FUNCTION)
+    assert fn_cand.status == ResolutionStatus.AMBIGUOUS
+    assert len(fn_cand.matched_nodes) == 2
